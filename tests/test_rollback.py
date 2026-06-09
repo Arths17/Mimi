@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from rollback import RollbackManager
-from snapshot import SkillScore, SkillSnapshot
+from keel.rollback import RollbackManager
+from keel.snapshot import SkillScore, SkillSnapshot
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
