@@ -46,14 +46,16 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-mock>=3.12.0",
+    "pytest-cov>=4.0.0",
 ]
 
 [project.scripts]
 keel = "keel.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/keelfit"
-Issues = "https://github.com/yourusername/keelfit/issues"
+Homepage = "https://github.com/keelfit/keelfit"
+"Bug Tracker" = "https://github.com/keelfit/keelfit/issues"
+PyPI = "https://pypi.org/project/keelfit"
 
 [tool.hatch.build.targets.wheel]
 packages = ["keel"]
