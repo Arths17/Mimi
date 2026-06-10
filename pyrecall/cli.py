@@ -44,7 +44,14 @@ def _read_config() -> dict:
             "Run [bold]pyrecall init[/bold] first."
         )
         raise typer.Exit(1)
-    return json.loads(cfg_path.read_text())
+    try:
+        return json.loads(cfg_path.read_text())
+    except json.JSONDecodeError as exc:
+        console.print(
+            f"[bold red]Error:[/bold red] {_CONFIG_FILE} is not valid JSON: {exc}\n"
+            "Fix or delete it and run [bold]pyrecall init[/bold] again."
+        )
+        raise typer.Exit(1) from exc
 
 
 def _write_config(data: dict) -> None:
@@ -100,6 +107,26 @@ def init(
     ] = 0.10,
 ) -> None:
     """Initialise pyrecall in the current project directory."""
+    errors: list[str] = []
+    if strategy not in ("lora", "qlora"):
+        errors.append(f"--strategy must be 'lora' or 'qlora', got '{strategy}'")
+    if lora_r < 1:
+        errors.append(f"--lora-r must be >= 1, got {lora_r}")
+    if not 0.0 <= lora_dropout < 1.0:
+        errors.append(f"--lora-dropout must be in [0, 1), got {lora_dropout}")
+    if learning_rate <= 0:
+        errors.append(f"--learning-rate must be > 0, got {learning_rate}")
+    if batch_size < 1:
+        errors.append(f"--batch-size must be >= 1, got {batch_size}")
+    if max_length < 1:
+        errors.append(f"--max-length must be >= 1, got {max_length}")
+    if not 0.0 < threshold <= 1.0:
+        errors.append(f"--threshold must be between 0 and 1, got {threshold}")
+    if errors:
+        for msg in errors:
+            console.print(f"[red]Error:[/red] {msg}")
+        raise typer.Exit(1)
+
     cfg_path = Path(_CONFIG_FILE)
     if cfg_path.exists():
         console.print(
@@ -209,12 +236,25 @@ def check(
                 "[red]Error:[/red] Provide both --before and --after, or neither."
             )
             raise typer.Exit(1)
-        snap_before = mgr.load_snapshot(before)
-        snap_after = mgr.load_snapshot(after)
+        try:
+            snap_before = mgr.load_snapshot(before)
+        except FileNotFoundError:
+            console.print(f"[red]Error:[/red] Snapshot '{before}' not found.")
+            raise typer.Exit(1)
+        try:
+            snap_after = mgr.load_snapshot(after)
+        except FileNotFoundError:
+            console.print(f"[red]Error:[/red] Snapshot '{after}' not found.")
+            raise typer.Exit(1)
 
     from pyrecall.detector import ForgettingDetector
 
     effective_threshold = threshold if threshold is not None else config.get("forgetting_threshold", 0.10)
+    if not 0.0 < effective_threshold <= 1.0:
+        console.print(
+            f"[red]Error:[/red] threshold must be between 0 and 1, got {effective_threshold}."
+        )
+        raise typer.Exit(1)
     detector = ForgettingDetector(threshold=effective_threshold)
     report = detector.compare(snap_before, snap_after)
     report.print()

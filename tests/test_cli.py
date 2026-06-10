@@ -110,9 +110,9 @@ class TestInit:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.chdir(tmp_path)
-        runner.invoke(app, ["init", "--strategy", "full"])
+        runner.invoke(app, ["init", "--strategy", "qlora"])
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
-        assert config["strategy"] == "full"
+        assert config["strategy"] == "qlora"
 
     def test_baseline_snapshot_initially_none(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

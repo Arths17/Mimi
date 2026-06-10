@@ -89,7 +89,12 @@ class SkillSnapshot:
                 f"No snapshot.json found in '{directory}'. "
                 "Make sure the snapshot was created with model.snapshot()."
             )
-        data = json.loads(snapshot_file.read_text())
+        try:
+            data = json.loads(snapshot_file.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Snapshot file '{snapshot_file}' is corrupted (invalid JSON): {exc}"
+            ) from exc
         return cls(
             name=data["name"],
             model_name=data["model_name"],

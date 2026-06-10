@@ -399,7 +399,7 @@ class Model:
             prompt,
             return_tensors="pt",
             truncation=True,
-            max_length=512,
+            max_length=self.max_length,
         ).to(self.device)
 
         with torch.no_grad():
