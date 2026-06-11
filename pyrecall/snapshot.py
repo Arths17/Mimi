@@ -68,7 +68,6 @@ class SkillSnapshot:
         directory.mkdir(parents=True, exist_ok=True)
         if not privacy:
             data = {
-                "encrypted": False,
                 "name": self.name,
                 "model_name": self.model_name,
                 "created_at": self.created_at.isoformat(),
@@ -81,7 +80,6 @@ class SkillSnapshot:
             encryptor = Encryptor()
             
             data = {
-                "encrypted": True,
                 "name": encryptor.encrypt(self.name),
                 "model_name": encryptor.encrypt(self.model_name),
                 "created_at": encryptor.encrypt(self.created_at.isoformat()),
