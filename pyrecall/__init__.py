@@ -15,7 +15,7 @@ Quick start::
         model.rollback(to="before_v1")
 """
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 from .detector import CategoryComparison, ForgettingDetector, ForgettingReport
 from .live import LiveLearner
@@ -23,6 +23,7 @@ from .model import Model, PyrecallError
 from .replay import ReplayBuffer
 from .rollback import RollbackManager
 from .snapshot import SkillScore, SkillSnapshot
+from .trackers import MLflowTracker, SnapshotTracker, WandbTracker
 
 __all__ = [
     "Model",
@@ -35,6 +36,9 @@ __all__ = [
     "RollbackManager",
     "LiveLearner",
     "ReplayBuffer",
+    "SnapshotTracker",
+    "WandbTracker",
+    "MLflowTracker",
 ]
 
 try:

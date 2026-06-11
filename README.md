@@ -84,7 +84,10 @@ When you call `model.snapshot("name")`, pyrecall:
 2. Embeds each response using the model's own hidden states
 3. Scores each response against a reference answer via cosine similarity
 4. Saves scores + LoRA adapter weights to `~/.pyrecall/snapshots/`
-5. Has a **privacy** optional parameter which users can use to hide their private data from being openly stored on their local files **Make sure you create a .env file** to store your **key** by doing **print(Fernet.generate_key().decode())**
+5. Optionally encrypts snapshot metadata when `privacy=True`.
+
+To use privacy mode, generate a key with `cryptography.fernet.Fernet.generate_key()`
+and set `ENCRYPT_KEY` in your `.env` file.
 
 All local. No API calls. Works offline.
 
@@ -285,6 +288,61 @@ pyrecall live clear --all
 pyrecall live clear --yes
 pyrecall live clear --all --yes
 ```
+
+---
+
+## Experiment tracker integrations
+
+Log snapshot scores to Weights & Biases or MLflow so every training run's capability profile shows up alongside your loss curves.
+
+### Weights & Biases
+
+```bash
+pip install pyrecall[wandb]
+```
+
+```python
+from pyrecall import Model
+from pyrecall.trackers import WandbTracker
+
+model = Model("meta-llama/Llama-3.2-1B")
+tracker = WandbTracker(project="my-finetune")
+model.snapshot("before_v1", tracker=tracker)   # scores logged to W&B automatically
+```
+
+Each snapshot becomes a W&B run named after the snapshot.  Metrics are logged as `pyrecall/<category>` and `pyrecall/overall`.
+
+### MLflow
+
+```bash
+pip install pyrecall[mlflow]
+```
+
+```python
+from pyrecall import Model
+from pyrecall.trackers import MLflowTracker
+
+model = Model("meta-llama/Llama-3.2-1B")
+tracker = MLflowTracker(experiment_name="my-finetune", tracking_uri="http://localhost:5000")
+model.snapshot("before_v1", tracker=tracker)
+```
+
+Metrics are logged as `pyrecall.<category>` and `pyrecall.overall`.  The snapshot name and model name are stored as run tags.
+
+### CLI flags
+
+Pass `--log-wandb` or `--log-mlflow` to any command that takes a snapshot:
+
+```bash
+pyrecall snapshot before_v1 --log-wandb
+pyrecall learn train.jsonl --snapshot-after after_v1 --log-mlflow
+```
+
+Both flags can be combined to log to both trackers simultaneously.
+
+### Custom trackers
+
+Any object with a `log_snapshot(snapshot: SkillSnapshot) -> None` method satisfies the `SnapshotTracker` protocol and can be passed as `tracker=`.
 
 ---
 

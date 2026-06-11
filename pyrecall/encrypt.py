@@ -1,21 +1,39 @@
-from cryptography.fernet import Fernet
-from dotenv import load_dotenv
-import os
+"""Optional encryption support for snapshot data."""
+
+from __future__ import annotations
 
 
 class Encryptor:
-    def __init__(self):
-        load_dotenv()
-        self.key = os.getenv("ENCRYPT_KEY")
-        
-        if self.key is None:
-            raise ValueError("ENCRYPTION KEY WAS NOT FOUND, MAKE SURE YOU HAVE SET YOUR KEY IN YOUR .env FILE")
-        
-        self.cipher = Fernet(self.key.encode())
+    """
+    Symmetric encryption wrapper for snapshot data using Fernet (AES-128-CBC).
 
-    def encrypt(self, text: str) -> str:
-        data = self.cipher.encrypt(text.encode())
-        return data.decode()
-    def decrypt(self, encrypted_text: str) -> str:
-        data_decrypted = self.cipher.decrypt(encrypted_text.encode())
-        return data_decrypted.decode()
+    Requires the ``cryptography`` package::
+
+        pip install pyrecall[privacy]
+
+    A new random key is generated on instantiation.  To reuse a key across
+    sessions, pass it explicitly::
+
+        enc = Encryptor(key=my_key)
+        enc2 = Encryptor(key=enc.key)   # same key → can decrypt enc's output
+
+    The ``key`` attribute is a URL-safe base64-encoded 32-byte value.
+    """
+
+    def __init__(self, key: bytes | None = None) -> None:
+        try:
+            from cryptography.fernet import Fernet
+        except ImportError as exc:
+            raise ImportError(
+                "Snapshot encryption requires the 'privacy' extra. "
+                "Install it with: pip install pyrecall[privacy]"
+            ) from exc
+
+        self.key: bytes = key or Fernet.generate_key()
+        self._fernet = Fernet(self.key)
+
+    def encrypt(self, value: str) -> str:
+        return self._fernet.encrypt(value.encode()).decode()
+
+    def decrypt(self, value: str) -> str:
+        return self._fernet.decrypt(value.encode()).decode()

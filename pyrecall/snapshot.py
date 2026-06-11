@@ -6,7 +6,8 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+
+
 @dataclass
 class SkillScore:
     """Score for a single benchmark item."""
@@ -25,7 +26,7 @@ class SkillScore:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SkillScore":
+    def from_dict(cls, data: dict) -> SkillScore:
         return cls(
             category=data["category"],
             prompt=data["prompt"],
@@ -42,11 +43,14 @@ class SkillSnapshot:
     Stores benchmark responses + scores and optionally a path to the saved
     LoRA adapter so the model can be rolled back to this exact state.
     """
+
     name: str
     model_name: str
     created_at: datetime = field(default_factory=datetime.now)
     scores: list[SkillScore] = field(default_factory=list)
-    adapter_path: Optional[Path] = None
+    adapter_path: Path | None = None
+    encrypted: bool = False
+
     # ── aggregation ────────────────────────────────────────────────────────────
     def category_scores(self) -> dict[str, float]:
         """Return average score per category."""
@@ -62,81 +66,70 @@ class SkillSnapshot:
         return sum(s.score for s in self.scores) / len(self.scores)
 
     # ── persistence ────────────────────────────────────────────────────────────
-    def save(self, directory: Path, privacy=False) -> None:
+    def save(self, directory: Path, privacy: bool = False) -> None:
         """Write snapshot metadata to *directory*/snapshot.json."""
         directory.mkdir(parents=True, exist_ok=True)
         if not privacy:
             data = {
+                "encrypted": False,
                 "name": self.name,
                 "model_name": self.model_name,
                 "created_at": self.created_at.isoformat(),
                 "scores": [s.to_dict() for s in self.scores],
                 "adapter_path": str(self.adapter_path) if self.adapter_path else None,
             }
-            (directory / "snapshot.json").write_text(json.dumps(data, indent=2))
         else:
             from .encrypt import Encryptor
+
             encryptor = Encryptor()
-            
             data = {
+                "encrypted": True,
+                "key": encryptor.key.decode(),
                 "name": encryptor.encrypt(self.name),
                 "model_name": encryptor.encrypt(self.model_name),
                 "created_at": encryptor.encrypt(self.created_at.isoformat()),
-                "scores": encryptor.encrypt(
-                        json.dumps([s.to_dict() for s in self.scores])
-                    ),
+                "scores": encryptor.encrypt(json.dumps([s.to_dict() for s in self.scores])),
                 "adapter_path": (
-                    encryptor.encrypt(str(self.adapter_path))
-                    if self.adapter_path
-                    else None
-                )
+                    encryptor.encrypt(str(self.adapter_path)) if self.adapter_path else None
+                ),
             }
+        (directory / "snapshot.json").write_text(json.dumps(data, indent=2))
 
     @classmethod
-    def load(cls, directory: Path) -> "SkillSnapshot":
+    def load(cls, directory: Path, privacy: bool = False) -> SkillSnapshot:
+        """Load a snapshot from *directory*/snapshot.json."""
         snapshot_file = directory / "snapshot.json"
-
         if not snapshot_file.exists():
             raise FileNotFoundError(
-                f"No snapshot.json found in '{directory}'."
+                f"No snapshot.json found in '{directory}'. "
+                "Make sure the snapshot was created with model.snapshot()."
             )
-
-        data = json.loads(snapshot_file.read_text())
-
-        if data.get("encrypted", False):
+        try:
+            data = json.loads(snapshot_file.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Snapshot file '{snapshot_file}' is corrupted (invalid JSON): {exc}"
+            ) from exc
+        if privacy:
             from .encrypt import Encryptor
-            encryptor = Encryptor()
 
+            encryptor = Encryptor(key=data["key"].encode())
             return cls(
                 name=encryptor.decrypt(data["name"]),
                 model_name=encryptor.decrypt(data["model_name"]),
-                created_at=datetime.fromisoformat(
-                    encryptor.decrypt(data["created_at"])
-                ),
+                created_at=datetime.fromisoformat(encryptor.decrypt(data["created_at"])),
                 scores=[
-                    SkillScore.from_dict(s)
-                    for s in json.loads(
-                        encryptor.decrypt(data["scores"])
-                    )
+                    SkillScore.from_dict(s) for s in json.loads(encryptor.decrypt(data["scores"]))
                 ],
                 adapter_path=(
-                    Path(encryptor.decrypt(data["adapter_path"]))
-                    if data["adapter_path"]
-                    else None
+                    Path(encryptor.decrypt(data["adapter_path"])) if data["adapter_path"] else None
                 ),
+                encrypted=True,
             )
-
         return cls(
             name=data["name"],
             model_name=data["model_name"],
             created_at=datetime.fromisoformat(data["created_at"]),
-            scores=[
-                SkillScore.from_dict(s)
-                for s in data["scores"]
-            ],
-            adapter_path=(
-                Path(data["adapter_path"])
-                if data["adapter_path"]
-                else None
-            ),
+            scores=[SkillScore.from_dict(s) for s in data["scores"]],
+            adapter_path=Path(data["adapter_path"]) if data["adapter_path"] else None,
         )
