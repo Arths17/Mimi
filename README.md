@@ -84,7 +84,7 @@ When you call `model.snapshot("name")`, pyrecall:
 2. Embeds each response using the model's own hidden states
 3. Scores each response against a reference answer via cosine similarity
 4. Saves scores + LoRA adapter weights to `~/.pyrecall/snapshots/`
-5. Optionally encrypts snapshot metadata when `privacy=True`.
+5. Optionally encrypts snapshot metadata when `privacy=True` (requires `pip install pyrecall[privacy]`).
 
 All local. No API calls. Works offline.
 
