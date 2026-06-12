@@ -1113,9 +1113,7 @@ class TestCompare:
         assert "snap_a" in data["categories"]["coding"]
         assert "snap_b" in data["categories"]["coding"]
 
-    def test_json_scores_are_correct(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_json_scores_are_correct(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snap_a = _make_snapshot("snap_a", {"coding": 0.80})
