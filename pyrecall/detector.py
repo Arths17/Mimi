@@ -59,8 +59,32 @@ class CategoryComparison:
         return (self.score_after - self.score_before) / self.score_before * 100.0
 
     @property
+    def threshold_based_severity(self) -> str:
+        """Severity by absolute score delta — used when n_items < 2 and Cohen's d is unavailable.
+
+        OK       — no drop
+        MINOR    — |delta| < 0.05
+        MODERATE — 0.05 ≤ |delta| < 0.15
+        SEVERE   — 0.15 ≤ |delta| < 0.30
+        CRITICAL — |delta| ≥ 0.30
+        """
+        if self.delta >= 0:
+            return "OK"
+        d = abs(self.delta)
+        if d >= 0.30:
+            return "CRITICAL"
+        if d >= 0.15:
+            return "SEVERE"
+        if d >= 0.05:
+            return "MODERATE"
+        return "MINOR"
+
+    @property
     def severity(self) -> str:
-        """Human-readable forgetting severity based on Cohen's d effect size.
+        """Human-readable forgetting severity.
+
+        Uses Cohen's d effect size when n_items ≥ 2; falls back to
+        threshold_based_severity (absolute delta buckets) for single-item categories.
 
         OK       — no meaningful drop
         MINOR    — small effect (|d| < 0.2), possible noise
@@ -68,6 +92,8 @@ class CategoryComparison:
         SEVERE   — medium-large effect (0.5 ≤ |d| < 0.8)
         CRITICAL — large effect (|d| ≥ 0.8)
         """
+        if self.n_items < 2:
+            return self.threshold_based_severity
         if self.delta >= 0:
             return "OK"
         d = abs(self.cohen_d)
@@ -197,7 +223,7 @@ class ForgettingReport:
                 "red" if comp.delta < -cat_threshold else ("green" if comp.delta >= 0 else "yellow")
             )
             d_sign = "+" if comp.cohen_d >= 0 else ""
-            cohen_str = f"{d_sign}{comp.cohen_d:.2f}" if comp.n_items >= 2 else "n/a"
+            cohen_str = f"{d_sign}{comp.cohen_d:.2f}" if comp.n_items >= 2 else "n/a *"
             status_markup = _SEVERITY_MARKUP.get(comp.severity, comp.severity)
 
             table.add_row(
@@ -209,8 +235,15 @@ class ForgettingReport:
                 status_markup,
             )
 
+        has_single_item = any(c.n_items < 2 for c in self.comparisons)
+
         console.print()
         console.print(table)
+        if has_single_item:
+            console.print(
+                "[dim]  * Severity estimated from score delta — "
+                "Cohen's d requires ≥ 2 prompts per category.[/dim]"
+            )
 
         if self.degraded_skills:
             console.print(
