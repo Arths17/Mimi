@@ -356,7 +356,7 @@ tracker = NeptuneTracker(project="workspace/my-project")
 model.snapshot("before_v1", tracker=tracker)
 ```
 
-Each snapshot becomes a Neptune run named after the snapshot. Per-category scores are logged as `pyrecall/<category>` fields, plus `pyrecall/overall`. The snapshot name and model name are stored as run tags.
+Each snapshot becomes a Neptune run named after the snapshot. Per-category scores are logged as `pyrecall/<category>` fields, plus `pyrecall/overall`. The `pyrecall` tag and model name are stored as run tags.
 
 ### Custom trackers
 
