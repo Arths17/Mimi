@@ -102,7 +102,6 @@ class RollbackManager:
     def has_snapshot(self, name: str) -> bool:
         """Return True if *name* refers to a saved snapshot."""
         return (self.base_dir / name / "snapshot.json").exists()
-    
 
     # ── private ────────────────────────────────────────────────────────────────
 
@@ -112,4 +111,3 @@ class RollbackManager:
             for d in sorted(self.base_dir.iterdir())
             if d.is_dir() and (d / "snapshot.json").exists()
         ]
-    
