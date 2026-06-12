@@ -523,6 +523,157 @@ class TestSeverityLevels:
         assert isinstance(comp_dict["cohen_d"], float)
 
 
+class TestSingleItemSeverityFallback:
+    """Severity should use delta-based buckets when n_items < 2 (Cohen's d unavailable)."""
+
+    def test_severity_ok_when_no_drop_single_item(self) -> None:
+        c = CategoryComparison(
+            category="qa", score_before=0.8, score_after=0.85, cohen_d=0.0, n_items=1
+        )
+        assert c.severity == "OK"
+
+    def test_severity_minor_for_tiny_drop_single_item(self) -> None:
+        c = CategoryComparison(
+            category="qa", score_before=0.8, score_after=0.77, cohen_d=0.0, n_items=1
+        )
+        assert c.severity == "MINOR"
+
+    def test_severity_moderate_single_item(self) -> None:
+        c = CategoryComparison(
+            category="qa", score_before=0.8, score_after=0.70, cohen_d=0.0, n_items=1
+        )
+        assert c.severity == "MODERATE"
+
+    def test_severity_severe_single_item(self) -> None:
+        c = CategoryComparison(
+            category="qa", score_before=0.8, score_after=0.62, cohen_d=0.0, n_items=1
+        )
+        assert c.severity == "SEVERE"
+
+    def test_severity_critical_single_item(self) -> None:
+        c = CategoryComparison(
+            category="qa", score_before=0.8, score_after=0.40, cohen_d=0.0, n_items=1
+        )
+        assert c.severity == "CRITICAL"
+
+    def test_severity_critical_not_minor_for_large_drop(self) -> None:
+        """Regression: single-item 0.4-point drop must NOT return MINOR."""
+        c = CategoryComparison(
+            category="domain_qa", score_before=0.9, score_after=0.5, cohen_d=0.0, n_items=1
+        )
+        assert c.severity != "MINOR"
+        assert c.severity == "CRITICAL"
+
+    def test_threshold_based_severity_property(self) -> None:
+        c = CategoryComparison(
+            category="qa", score_before=0.9, score_after=0.5, cohen_d=0.0, n_items=1
+        )
+        assert c.threshold_based_severity == "CRITICAL"
+
+    def test_severity_uses_cohen_d_when_n_items_ge_2(self) -> None:
+        # Large drop but tiny Cohen's d → should be MINOR via effect-size path
+        c = CategoryComparison(
+            category="qa", score_before=0.8, score_after=0.40, cohen_d=-0.1, n_items=5
+        )
+        assert c.severity == "MINOR"
+
+    def test_render_footnote_present_for_single_item(self) -> None:
+        from io import StringIO
+
+        from rich.console import Console
+
+        report = ForgettingReport(
+            snapshot_before="b",
+            snapshot_after="a",
+            threshold=0.10,
+            comparisons=[
+                CategoryComparison(
+                    category="domain_qa", score_before=0.9, score_after=0.5, cohen_d=0.0, n_items=1
+                )
+            ],
+        )
+        buf = StringIO()
+        report._render(Console(file=buf, highlight=False))
+        assert "Cohen's d requires" in buf.getvalue()
+
+    def test_render_no_footnote_when_all_multi_item(self) -> None:
+        from io import StringIO
+
+        from rich.console import Console
+
+        report = ForgettingReport(
+            snapshot_before="b",
+            snapshot_after="a",
+            threshold=0.10,
+            comparisons=[
+                CategoryComparison(
+                    category="coding", score_before=0.8, score_after=0.7, cohen_d=-0.5, n_items=5
+                )
+            ],
+        )
+        buf = StringIO()
+        report._render(Console(file=buf, highlight=False))
+        assert "Cohen's d requires" not in buf.getvalue()
+
+    def test_compare_single_prompt_category_severity_not_minor_for_large_drop(self) -> None:
+        """End-to-end: custom suite with 1 prompt per category, big drop → not MINOR."""
+        detector = ForgettingDetector(threshold=0.10)
+        before = _make_snapshot("before", {"domain_qa": 0.9})
+        after = _make_snapshot("after", {"domain_qa": 0.5})
+        report = detector.compare(before, after)
+        comp = next(c for c in report.comparisons if c.category == "domain_qa")
+        assert comp.n_items == 1
+        assert comp.severity not in ("MINOR", "OK")
+
+
+class TestSeverityMethodField:
+    def test_severity_method_effect_size_when_multi_item(self) -> None:
+        c = CategoryComparison(
+            category="coding", score_before=0.8, score_after=0.7, cohen_d=-0.5, n_items=5
+        )
+        assert c.severity_method == "effect_size"
+
+    def test_severity_method_delta_when_single_item(self) -> None:
+        c = CategoryComparison(
+            category="qa", score_before=0.8, score_after=0.5, cohen_d=0.0, n_items=1
+        )
+        assert c.severity_method == "delta"
+
+    def test_severity_method_delta_when_zero_items(self) -> None:
+        c = CategoryComparison(category="qa", score_before=0.8, score_after=0.5, n_items=0)
+        assert c.severity_method == "delta"
+
+    def test_severity_method_in_to_dict(self) -> None:
+        detector = ForgettingDetector(threshold=0.10)
+        before = _make_snapshot("b", {"coding": 0.8})
+        after = _make_snapshot("a", {"coding": 0.6})
+        report = detector.compare(before, after)
+        comp_dict = report.to_dict()["comparisons"][0]
+        assert "severity_method" in comp_dict
+        assert comp_dict["severity_method"] in ("effect_size", "delta")
+
+    def test_severity_method_effect_size_in_to_dict_for_multi_prompt(self) -> None:
+        before = _make_snapshot_with_items("b", {"coding": [0.8, 0.7]})
+        after = _make_snapshot_with_items("a", {"coding": [0.6, 0.5]})
+        report = ForgettingDetector().compare(before, after)
+        comp_dict = next(c for c in report.to_dict()["comparisons"] if c["category"] == "coding")
+        assert comp_dict["severity_method"] == "effect_size"
+
+
+class TestDeltaThresholdConstants:
+    def test_constants_exported(self) -> None:
+        from pyrecall.detector import _DELTA_MINOR, _DELTA_MODERATE, _DELTA_SEVERE
+
+        assert _DELTA_MINOR == 0.05
+        assert _DELTA_MODERATE == 0.15
+        assert _DELTA_SEVERE == 0.30
+
+    def test_constants_ordered(self) -> None:
+        from pyrecall.detector import _DELTA_MINOR, _DELTA_MODERATE, _DELTA_SEVERE
+
+        assert _DELTA_MINOR < _DELTA_MODERATE < _DELTA_SEVERE
+
+
 class TestBenchmarkCount:
     def test_default_benchmarks_total_160(self) -> None:
         from pyrecall.benchmarks.default import DEFAULT_BENCHMARKS

@@ -12,6 +12,11 @@ from rich.table import Table
 from .snapshot import SkillSnapshot
 from .utils import console as _shared_console
 
+# Delta-bucket thresholds used when n_items < 2 and effect size is unavailable.
+_DELTA_MINOR: float = 0.05
+_DELTA_MODERATE: float = 0.15
+_DELTA_SEVERE: float = 0.30
+
 
 @dataclass
 class PromptComparison:
@@ -43,8 +48,19 @@ class CategoryComparison:
     category: str
     score_before: float
     score_after: float
-    cohen_d: float = 0.0  # paired Cohen's d across per-item deltas (negative = forgetting)
+    # Standardized effect size of per-item score deltas (mean_delta / std_delta).
+    # Requires n_items ≥ 2; 0.0 when unavailable.
+    cohen_d: float = 0.0
     n_items: int = 0
+
+    @property
+    def severity_method(self) -> str:
+        """Which method was used to compute :attr:`severity`.
+
+        ``"effect_size"`` — standardized effect size of per-item deltas (n_items ≥ 2).
+        ``"delta"``       — absolute score-drop buckets (n_items < 2 fallback).
+        """
+        return "effect_size" if self.n_items >= 2 else "delta"
 
     @property
     def delta(self) -> float:
@@ -59,8 +75,34 @@ class CategoryComparison:
         return (self.score_after - self.score_before) / self.score_before * 100.0
 
     @property
+    def threshold_based_severity(self) -> str:
+        """Severity by absolute score delta — used when n_items < 2 and effect size is unavailable.
+
+        Thresholds (_DELTA_MINOR / _DELTA_MODERATE / _DELTA_SEVERE) are module-level constants.
+
+        OK       — no drop
+        MINOR    — |delta| < _DELTA_MINOR  (0.05)
+        MODERATE — _DELTA_MINOR  ≤ |delta| < _DELTA_MODERATE (0.15)
+        SEVERE   — _DELTA_MODERATE ≤ |delta| < _DELTA_SEVERE  (0.30)
+        CRITICAL — |delta| ≥ _DELTA_SEVERE (0.30)
+        """
+        if self.delta >= 0:
+            return "OK"
+        d = abs(self.delta)
+        if d >= _DELTA_SEVERE:
+            return "CRITICAL"
+        if d >= _DELTA_MODERATE:
+            return "SEVERE"
+        if d >= _DELTA_MINOR:
+            return "MODERATE"
+        return "MINOR"
+
+    @property
     def severity(self) -> str:
-        """Human-readable forgetting severity based on Cohen's d effect size.
+        """Human-readable forgetting severity.
+
+        Uses Cohen's d effect size when n_items ≥ 2; falls back to
+        threshold_based_severity (absolute delta buckets) for single-item categories.
 
         OK       — no meaningful drop
         MINOR    — small effect (|d| < 0.2), possible noise
@@ -68,6 +110,8 @@ class CategoryComparison:
         SEVERE   — medium-large effect (0.5 ≤ |d| < 0.8)
         CRITICAL — large effect (|d| ≥ 0.8)
         """
+        if self.n_items < 2:
+            return self.threshold_based_severity
         if self.delta >= 0:
             return "OK"
         d = abs(self.cohen_d)
@@ -142,6 +186,7 @@ class ForgettingReport:
                     "cohen_d": round(c.cohen_d, 4),
                     "n_items": c.n_items,
                     "severity": c.severity,
+                    "severity_method": c.severity_method,
                     "status": "FORGOTTEN"
                     if (c.score_before - c.score_after) > self._threshold_for(c.category)
                     else "OK",
@@ -197,7 +242,7 @@ class ForgettingReport:
                 "red" if comp.delta < -cat_threshold else ("green" if comp.delta >= 0 else "yellow")
             )
             d_sign = "+" if comp.cohen_d >= 0 else ""
-            cohen_str = f"{d_sign}{comp.cohen_d:.2f}" if comp.n_items >= 2 else "n/a"
+            cohen_str = f"{d_sign}{comp.cohen_d:.2f}" if comp.n_items >= 2 else "n/a *"
             status_markup = _SEVERITY_MARKUP.get(comp.severity, comp.severity)
 
             table.add_row(
@@ -209,8 +254,15 @@ class ForgettingReport:
                 status_markup,
             )
 
+        has_single_item = any(c.n_items < 2 for c in self.comparisons)
+
         console.print()
         console.print(table)
+        if has_single_item:
+            console.print(
+                "[dim]  * Severity estimated from score delta — "
+                "Cohen's d requires ≥ 2 prompts per category.[/dim]"
+            )
 
         if self.degraded_skills:
             console.print(
@@ -308,7 +360,7 @@ class ForgettingDetector:
             for cat, prompt in all_keys
         ]
 
-        # Compute paired Cohen's d per category from per-item deltas.
+        # Compute standardized effect size of per-item deltas per category.
         cat_deltas: dict[str, list[float]] = {}
         for pc in prompt_comparisons:
             cat_deltas.setdefault(pc.category, []).append(pc.score_after - pc.score_before)
