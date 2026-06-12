@@ -653,6 +653,94 @@ def diff(
 
 
 @app.command()
+def compare(
+    snapshots: Annotated[
+        list[str],
+        typer.Argument(help="Two or more snapshot names to compare side by side"),
+    ],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output results as JSON instead of a rich table."),
+    ] = False,
+) -> None:
+    """
+    Compare N snapshots side by side in a single table.
+
+    Unlike 'diff' (which is limited to two snapshots), 'compare' accepts any
+    number of names and renders every category score as columns so you can
+    see the full progression across multiple training runs at a glance.
+
+    The best score in each row is highlighted green; the worst is red.
+
+        pyrecall compare before_v1 after_v1 after_v2 after_v3
+        pyrecall compare before_v1 after_v1 --json
+    """
+    if len(snapshots) < 2:
+        console.print("[red]Error:[/red] At least two snapshot names are required.")
+        raise typer.Exit(1)
+
+    config = _read_config()
+    mgr = _build_rollback_manager(config)
+
+    loaded: list = []
+    for name in snapshots:
+        try:
+            loaded.append(mgr.load_snapshot(name))
+        except FileNotFoundError:
+            console.print(f"[red]Error:[/red] Snapshot '{name}' not found.")
+            raise typer.Exit(1)
+
+    # Collect all category names in a stable order.
+    all_cats: list[str] = []
+    for snap in loaded:
+        for cat in snap.category_scores():
+            if cat not in all_cats:
+                all_cats.append(cat)
+
+    if json_output:
+        out: dict = {
+            "snapshots": [s.name for s in loaded],
+            "categories": {
+                "overall": {s.name: round(s.overall_score(), 4) for s in loaded},
+                **{
+                    cat: {s.name: round(s.category_scores().get(cat, 0.0), 4) for s in loaded}
+                    for cat in all_cats
+                },
+            },
+        }
+        typer.echo(json.dumps(out, indent=2))
+        return
+
+    table = Table(
+        title=f"Snapshot Comparison — {config['model_name']}",
+        show_lines=False,
+    )
+    table.add_column("Category", style="bold white")
+    for snap in loaded:
+        table.add_column(snap.name, justify="right")
+
+    def _fmt_row(label: str, values: list[float]) -> None:
+        best = max(values)
+        worst = min(values)
+        cells: list[str] = [label]
+        for v in values:
+            s = f"{v:.3f}"
+            if v == best and best != worst:
+                cells.append(f"[green]{s}[/green]")
+            elif v == worst and best != worst:
+                cells.append(f"[red]{s}[/red]")
+            else:
+                cells.append(s)
+        table.add_row(*cells)
+
+    _fmt_row("overall", [s.overall_score() for s in loaded])
+    for cat in all_cats:
+        _fmt_row(cat, [s.category_scores().get(cat, 0.0) for s in loaded])
+
+    console.print(table)
+
+
+@app.command()
 def rollback(
     snapshot_name: Annotated[str, typer.Argument(help="Snapshot to roll back to")],
 ) -> None:

@@ -174,6 +174,10 @@ pyrecall check --before before_v1 --after after_v1
 # Diff any two snapshots without loading the model (fast, works offline)
 pyrecall diff before_v1 after_v2
 
+# Compare N snapshots side by side in one table (best = green, worst = red)
+pyrecall compare before_v1 after_v1 after_v2 after_v3
+pyrecall compare before_v1 after_v1 --json
+
 # Rollback to a previous snapshot
 pyrecall rollback before_v1
 
