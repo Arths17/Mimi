@@ -576,6 +576,14 @@ def check(
             "--verbose", "-v", help="Show per-prompt score breakdown for each degraded skill."
         ),
     ] = False,
+    output: Annotated[
+        str | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Save the report to a file. Format inferred from extension: .html, .md, or .json.",
+        ),
+    ] = None,
 ) -> None:
     """
     Compare two snapshots to detect forgotten skills.
@@ -588,9 +596,11 @@ def check(
 
         pyrecall check --json | jq '.comparisons[].prompts'
 
-    Use --verbose to see which specific benchmark prompts drove a drop:
+    Use --output to save the report to a file:
 
-        pyrecall check --verbose
+        pyrecall check --output report.html
+        pyrecall check --output report.md
+        pyrecall check --output report.json
     """
     config = _read_config()
     mgr = _build_rollback_manager(config)
@@ -646,6 +656,14 @@ def check(
     else:
         report.print(verbose=verbose)
 
+    if output:
+        try:
+            report.save(output)
+            console.print(f"[dim]Report saved to {output}[/dim]")
+        except ValueError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
     if report.degraded_skills:
         raise typer.Exit(2)  # Non-zero exit so CI pipelines can catch forgetting.
 
@@ -681,6 +699,14 @@ def diff(
             "--verbose", "-v", help="Show per-prompt score breakdown for each degraded skill."
         ),
     ] = False,
+    output: Annotated[
+        str | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Save the report to a file. Format inferred from extension: .html, .md, or .json.",
+        ),
+    ] = None,
 ) -> None:
     """
     Diff two saved snapshots without running new benchmarks.
@@ -690,8 +716,8 @@ def diff(
     in any CI step.  Exits with code 2 when forgetting is detected.
 
         pyrecall diff before_v1 after_v2
+        pyrecall diff before_v1 after_v2 --output report.html
         pyrecall diff before_v1 after_v2 --json | jq '.comparisons[].status'
-        pyrecall diff before_v1 after_v2 --verbose
     """
     config = _read_config()
     mgr = _build_rollback_manager(config)
@@ -731,6 +757,14 @@ def diff(
         typer.echo(report.to_json())
     else:
         report.print(verbose=verbose)
+
+    if output:
+        try:
+            report.save(output)
+            console.print(f"[dim]Report saved to {output}[/dim]")
+        except ValueError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
 
     if report.degraded_skills:
         raise typer.Exit(2)
