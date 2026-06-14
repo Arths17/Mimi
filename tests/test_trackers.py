@@ -179,7 +179,9 @@ class TestMLflowTracker:
 
 
 class TestModelSnapshotTrackerIntegration:
-    def _make_model(self, scores):
+    def _make_model(self, scores, tmp_path=None):
+        from pathlib import Path
+
         from pyrecall.model import Model
 
         m = object.__new__(Model)
@@ -188,6 +190,7 @@ class TestModelSnapshotTrackerIntegration:
         m.rollback_manager = MagicMock()
         m._baseline_snapshot_name = None
         m._snapshot_compression = "none"
+        m._baseline_file = Path(tmp_path or "/tmp") / "pyrecall_test_baseline.txt"
         return m
 
     def test_tracker_log_snapshot_called_after_save(self) -> None:

@@ -1967,7 +1967,7 @@ def export(
                 "overall": round(snap.overall_score(), 4),
             }
             for cat in all_categories:
-                row[cat] = round(cat_scores.get(cat, 0.0), 4)
+                row[cat] = round(cat_scores[cat], 4) if cat in cat_scores else ""
             rows.append(row)
 
         if output:

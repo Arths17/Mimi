@@ -854,8 +854,8 @@ class Model:
         self._baseline_snapshot_name = name
         try:
             self._baseline_file.write_text(name)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.warning("Could not persist baseline to %s: %s", self._baseline_file, exc)
 
     def _run_benchmarks(self) -> list[SkillScore]:
         """Run default + custom benchmarks and return SkillScore objects."""

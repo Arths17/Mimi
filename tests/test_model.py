@@ -135,6 +135,17 @@ class TestModelSnapshot:
         patched_model.snapshot(name="baseline")
         assert patched_model._baseline_snapshot_name == "baseline"
 
+    def test_set_baseline_logs_warning_on_oserror(self, patched_model) -> None:
+        """_set_baseline() must warn (not silently pass) when the file write fails (#103)."""
+        mock_path = MagicMock()
+        mock_path.write_text.side_effect = OSError("disk full")
+        patched_model._baseline_file = mock_path
+
+        with patch("pyrecall.model.logger") as mock_logger:
+            patched_model._set_baseline("my_snap")
+            mock_logger.warning.assert_called_once()
+        assert patched_model._baseline_snapshot_name == "my_snap"
+
     def test_snapshot_returns_skill_snapshot(self, patched_model) -> None:
         from pyrecall.snapshot import SkillSnapshot
 
@@ -144,7 +155,8 @@ class TestModelSnapshot:
     def test_snapshot_has_correct_score_count(self, patched_model) -> None:
         from pyrecall.benchmarks.default import DEFAULT_BENCHMARKS
 
-        snap = patched_model.snapshot(name="count_test")
+        with patch("pyrecall.model.CustomBenchmarkManager.load_all", return_value=[]):
+            snap = patched_model.snapshot(name="count_test")
         assert len(snap.scores) == len(DEFAULT_BENCHMARKS)
 
     def test_snapshot_scores_normalised(self, patched_model) -> None:
