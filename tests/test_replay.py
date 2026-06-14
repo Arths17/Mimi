@@ -401,8 +401,10 @@ class TestReplayBufferCategories:
         buf_path = tmp_path / "test--model" / "buffer.jsonl"
         buf_path.parent.mkdir(parents=True)
         buf_path.write_text(
-            json.dumps({"total_seen": 2, "max_size": 10}) + "\n"
-            + json.dumps({"text": "old entry"}) + "\n"
+            json.dumps({"total_seen": 2, "max_size": 10})
+            + "\n"
+            + json.dumps({"text": "old entry"})
+            + "\n"
         )
 
         buf = ReplayBuffer("test/model", max_size=10, base_dir=tmp_path)
@@ -443,9 +445,7 @@ class TestReplayBufferCategories:
         from unittest.mock import MagicMock, patch
 
         data_file = tmp_path / "train.jsonl"
-        data_file.write_text(
-            json.dumps({"text": "train text", "category": "coding"}) + "\n"
-        )
+        data_file.write_text(json.dumps({"text": "train text", "category": "coding"}) + "\n")
 
         real_ds = HFDataset.from_dict({"text": ["train text"], "category": ["coding"]})
         mock_trainer = MagicMock()
@@ -496,7 +496,9 @@ class TestReplayBufferCategories:
             snapshot_after="post",
             threshold=0.1,
             comparisons=[
-                CategoryComparison(category="coding", score_before=0.8, score_after=0.3, cohen_d=-1.2),
+                CategoryComparison(
+                    category="coding", score_before=0.8, score_after=0.3, cohen_d=-1.2
+                ),
             ],
         )
 

@@ -370,8 +370,7 @@ class Model:
         resolved_replay_weights: dict[str, float] | None = None
         if isinstance(replay_weights, ForgettingReport):
             resolved_replay_weights = {
-                cat: _SEVERITY_WEIGHT.get(sev, 1.0)
-                for cat, sev in replay_weights.severity.items()
+                cat: _SEVERITY_WEIGHT.get(sev, 1.0) for cat, sev in replay_weights.severity.items()
             }
         elif replay_weights is not None:
             resolved_replay_weights = replay_weights
@@ -437,7 +436,9 @@ class Model:
         # so we only add truly new examples to the replay buffer after training.
         new_texts: list[str] = dataset[text_col] if self.replay_buffer is not None else []
         new_categories: list[str | None] = (
-            list(dataset["category"]) if self.replay_buffer is not None and "category" in dataset.column_names else [None] * len(new_texts)
+            list(dataset["category"])
+            if self.replay_buffer is not None and "category" in dataset.column_names
+            else [None] * len(new_texts)
         )
 
         # Mix in replay examples before tokenisation.

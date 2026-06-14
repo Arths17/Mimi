@@ -164,7 +164,9 @@ class ReplayBuffer:
     def _save(self) -> None:
         meta = {"total_seen": self._total_seen, "max_size": self._max_size}
         lines = [json.dumps(meta)]
-        lines += [json.dumps({"text": e["text"], "category": e.get("category")}) for e in self._buffer]
+        lines += [
+            json.dumps({"text": e["text"], "category": e.get("category")}) for e in self._buffer
+        ]
         self._path.write_text("\n".join(lines) + "\n")
 
     def _load(self) -> None:
