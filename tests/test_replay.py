@@ -380,7 +380,7 @@ class TestReplayBufferCategories:
         buf.add(["text a", "text b"], categories=["coding", "safety"])
         # sample returns text strings, so verify via persistence file
         lines = (tmp_path / "test--model" / "buffer.jsonl").read_text().splitlines()
-        entries = [json.loads(l) for l in lines[1:] if l.strip()]
+        entries = [json.loads(line) for line in lines[1:] if line.strip()]
         cats = {e["text"]: e["category"] for e in entries}
         assert cats["text a"] == "coding"
         assert cats["text b"] == "safety"
@@ -441,8 +441,9 @@ class TestReplayBufferCategories:
     def test_learn_passes_categories_to_buffer(
         self, patched_model_with_replay, tmp_path: Path
     ) -> None:
-        from datasets import Dataset as HFDataset
         from unittest.mock import MagicMock, patch
+
+        from datasets import Dataset as HFDataset
 
         data_file = tmp_path / "train.jsonl"
         data_file.write_text(json.dumps({"text": "train text", "category": "coding"}) + "\n")
@@ -480,9 +481,11 @@ class TestReplayBufferCategories:
     def test_learn_replay_weights_from_report(
         self, patched_model_with_replay, tmp_path: Path
     ) -> None:
-        from datasets import Dataset as HFDataset
         from unittest.mock import MagicMock, patch
-        from pyrecall.detector import ForgettingReport, CategoryComparison
+
+        from datasets import Dataset as HFDataset
+
+        from pyrecall.detector import CategoryComparison, ForgettingReport
 
         data_file = tmp_path / "train.jsonl"
         data_file.write_text(json.dumps({"text": "hi"}) + "\n")
