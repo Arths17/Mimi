@@ -571,11 +571,26 @@ class TestSingleItemSeverityFallback:
         assert c.threshold_based_severity == "CRITICAL"
 
     def test_severity_uses_cohen_d_when_n_items_ge_2(self) -> None:
-        # Large drop but tiny Cohen's d → should be MINOR via effect-size path
+        # Large drop but tiny non-zero Cohen's d → should be MINOR via effect-size path.
         c = CategoryComparison(
             category="qa", score_before=0.8, score_after=0.40, cohen_d=-0.1, n_items=5
         )
         assert c.severity == "MINOR"
+
+    def test_severity_zero_variance_multi_item_falls_back_to_delta(self) -> None:
+        # cohen_d=0 with n_items>=2 and real drop means std_d was zero (identical deltas).
+        # Must use threshold_based_severity, not return MINOR.
+        c = CategoryComparison(
+            category="safety", score_before=0.9, score_after=0.1, cohen_d=0.0, n_items=5
+        )
+        assert c.severity == "CRITICAL"
+
+    def test_severity_zero_variance_no_drop_is_ok(self) -> None:
+        # cohen_d=0 but delta>=0 → OK, not a fallback case.
+        c = CategoryComparison(
+            category="safety", score_before=0.8, score_after=0.8, cohen_d=0.0, n_items=5
+        )
+        assert c.severity == "OK"
 
     def test_render_footnote_present_for_single_item(self) -> None:
         from io import StringIO
@@ -653,11 +668,21 @@ class TestSeverityMethodField:
         assert comp_dict["severity_method"] in ("effect_size", "delta")
 
     def test_severity_method_effect_size_in_to_dict_for_multi_prompt(self) -> None:
+        # Use varied deltas so std_d > 0 and cohen_d is non-zero → effect_size path.
         before = _make_snapshot_with_items("b", {"coding": [0.8, 0.7]})
-        after = _make_snapshot_with_items("a", {"coding": [0.6, 0.5]})
+        after = _make_snapshot_with_items("a", {"coding": [0.6, 0.4]})
         report = ForgettingDetector().compare(before, after)
         comp_dict = next(c for c in report.to_dict()["comparisons"] if c["category"] == "coding")
         assert comp_dict["severity_method"] == "effect_size"
+
+    def test_severity_method_delta_when_zero_variance_multi_prompt(self) -> None:
+        # Identical deltas → zero variance → cohen_d=0 → falls back to delta method.
+        before = _make_snapshot_with_items("b", {"coding": [0.9, 0.9]})
+        after = _make_snapshot_with_items("a", {"coding": [0.1, 0.1]})
+        report = ForgettingDetector().compare(before, after)
+        comp_dict = next(c for c in report.to_dict()["comparisons"] if c["category"] == "coding")
+        assert comp_dict["severity_method"] == "delta"
+        assert comp_dict["severity"] == "CRITICAL"
 
 
 class TestDeltaThresholdConstants:

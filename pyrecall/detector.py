@@ -57,10 +57,14 @@ class CategoryComparison:
     def severity_method(self) -> str:
         """Which method was used to compute :attr:`severity`.
 
-        ``"effect_size"`` — standardized effect size of per-item deltas (n_items ≥ 2).
-        ``"delta"``       — absolute score-drop buckets (n_items < 2 fallback).
+        ``"effect_size"`` — standardized effect size of per-item deltas (n_items ≥ 2 with variance).
+        ``"delta"``       — absolute score-drop buckets (n_items < 2, or zero-variance fallback).
         """
-        return "effect_size" if self.n_items >= 2 else "delta"
+        if self.n_items < 2:
+            return "delta"
+        if self.cohen_d == 0.0 and self.delta < 0:
+            return "delta"
+        return "effect_size"
 
     @property
     def delta(self) -> float:
@@ -101,8 +105,10 @@ class CategoryComparison:
     def severity(self) -> str:
         """Human-readable forgetting severity.
 
-        Uses Cohen's d effect size when n_items ≥ 2; falls back to
-        threshold_based_severity (absolute delta buckets) for single-item categories.
+        Uses Cohen's d effect size when n_items ≥ 2 and per-item deltas have variance.
+        Falls back to threshold_based_severity (absolute delta buckets) when n_items < 2
+        or when all per-item deltas are identical (zero variance — cohen_d would be 0
+        due to undefined std, not because the drop is small).
 
         OK       — no meaningful drop
         MINOR    — small effect (|d| < 0.2), possible noise
@@ -115,6 +121,10 @@ class CategoryComparison:
         if self.delta >= 0:
             return "OK"
         d = abs(self.cohen_d)
+        if d == 0.0:
+            # std_d was zero — all per-prompt deltas are identical; cohen_d is meaningless.
+            # The drop is real, so fall back to absolute delta buckets.
+            return self.threshold_based_severity
         if d >= 0.8:
             return "CRITICAL"
         if d >= 0.5:
