@@ -781,8 +781,9 @@ class TestStreamingLearn:
         assert any(isinstance(cb, _StreamingCallback) for cb in callbacks)
 
     def test_streaming_callback_on_log_updates_loss(self) -> None:
-        from pyrecall.model import _StreamingCallback
         from unittest.mock import patch as _patch
+
+        from pyrecall.model import _StreamingCallback
 
         cb = _StreamingCallback(total_steps=10)
         with _patch.object(cb._progress, "update") as mock_update, \
@@ -795,8 +796,9 @@ class TestStreamingLearn:
             assert cb.last_loss == pytest.approx(0.4567)
 
     def test_streaming_callback_ignores_missing_loss(self) -> None:
-        from pyrecall.model import _StreamingCallback
         from unittest.mock import patch as _patch
+
+        from pyrecall.model import _StreamingCallback
 
         cb = _StreamingCallback(total_steps=5)
         with _patch.object(cb._progress, "update") as mock_update, \
